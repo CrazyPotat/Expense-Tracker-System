@@ -1,0 +1,911 @@
+
+import { useEffect, useState } from "react";
+import './App.css';
+
+const API_URL = "http://localhost:5000/api/auth";
+const TRANSACTION_API_URL = "http://localhost:5000/api/transactions";
+
+function DashboardView({ user, onLogout }) {
+  const [summary, setSummary] = useState({
+    totalIncome: 0,
+    totalExpenses: 0,
+    balance: 0,
+  });
+  const [transactions, setTransactions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadDashboard() {
+      setLoading(true);
+      setError("");
+
+      try {
+        const userId = encodeURIComponent(user.id);
+
+        const [summaryResponse, transactionsResponse] =
+          await Promise.all([
+            fetch(
+              `${TRANSACTION_API_URL}/summary?user_id=${userId}`
+            ),
+            fetch(
+              `${TRANSACTION_API_URL}?user_id=${userId}`
+            ),
+          ]);
+
+        const summaryData = await summaryResponse.json();
+        const transactionData = await transactionsResponse.json();
+
+        if (!summaryResponse.ok) {
+          throw new Error(
+            summaryData.message || "Failed to load financial summary."
+          );
+        }
+
+        if (!transactionsResponse.ok) {
+          throw new Error(
+            transactionData.message || "Failed to load transactions."
+          );
+        }
+
+        if (cancelled) return;
+
+        setSummary({
+          totalIncome: Number(summaryData.totalIncome) || 0,
+          totalExpenses: Number(summaryData.totalExpenses) || 0,
+          balance: Number(summaryData.balance) || 0,
+        });
+
+        setTransactions(
+          Array.isArray(transactionData)
+            ? transactionData.slice(0, 5)
+            : []
+        );
+      } catch (err) {
+        if (!cancelled) {
+          setError(err.message || "Unable to load dashboard data.");
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    if (user?.id) {
+      loadDashboard();
+    } else {
+      setError("User information is missing. Please log in again.");
+      setLoading(false);
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
+
+  const money = (amount) =>
+    Number(amount).toLocaleString("en-PH", {
+      style: "currency",
+      currency: "PHP",
+    });
+
+  const firstName = user.full_name?.split(" ")[0] || "User";
+
+  return (
+    <div className="dashboard-page">
+      <header className="dashboard-navbar">
+        <a className="dashboard-brand" href="#dashboard">
+          <span className="dashboard-brand-icon">₱</span>
+          Expense<span>Track</span>
+        </a>
+
+        <div className="dashboard-user-actions">
+          <span>Welcome, {firstName}!</span>
+          <button
+            type="button"
+            onClick={onLogout}
+            className="dashboard-logout"
+          >
+            Log Out
+          </button>
+        </div>
+      </header>
+
+      <main className="dashboard-main">
+        <div className="dashboard-heading">
+          <div>
+            <span className="dashboard-eyebrow">YOUR FINANCES</span>
+            <h1>Dashboard</h1>
+            <p>Here's an overview of your financial activity.</p>
+          </div>
+
+          <div className="dashboard-date">
+            {new Date().toLocaleDateString("en-PH", {
+              month: "long",
+              day: "numeric",
+              year: "numeric",
+            })}
+          </div>
+        </div>
+
+        {error && (
+          <div className="dashboard-error" role="alert">
+            {error}
+          </div>
+        )}
+
+        <section className="dashboard-summary">
+          <article className="summary-card summary-income">
+            <div className="summary-card-top">
+              <span>Total Income</span>
+              <span className="summary-icon">↗</span>
+            </div>
+            <h2>{loading ? "Loading..." : money(summary.totalIncome)}</h2>
+            <p>All recorded income</p>
+          </article>
+
+          <article className="summary-card summary-expenses">
+            <div className="summary-card-top">
+              <span>Total Expenses</span>
+              <span className="summary-icon">↘</span>
+            </div>
+            <h2>{loading ? "Loading..." : money(summary.totalExpenses)}</h2>
+            <p>All recorded expenses</p>
+          </article>
+
+          <article className="summary-card summary-balance">
+            <div className="summary-card-top">
+              <span>Current Balance</span>
+              <span className="summary-icon">₱</span>
+            </div>
+            <h2>{loading ? "Loading..." : money(summary.balance)}</h2>
+            <p>Income minus expenses</p>
+          </article>
+        </section>
+
+        <section className="transactions-panel">
+          <div className="transactions-panel-heading">
+            <div>
+              <h2>Recent Transactions</h2>
+              <p>Your latest recorded financial activity</p>
+            </div>
+            <span className="transaction-count">
+              {transactions.length} shown
+            </span>
+          </div>
+
+          {loading ? (
+            <div className="dashboard-empty">
+              Loading transactions...
+            </div>
+          ) : error ? (
+            <div className="dashboard-empty">
+              Transactions could not be loaded.
+            </div>
+          ) : transactions.length === 0 ? (
+            <div className="dashboard-empty">
+              <div className="empty-icon">₱</div>
+              <h3>No transactions yet</h3>
+              <p>
+                Once you have recorded income or expenses, they will
+                appear here.
+              </p>
+            </div>
+          ) : (
+            <div className="transactions-table-wrap">
+              <table className="transactions-table">
+                <thead>
+                  <tr>
+                    <th>Description</th>
+                    <th>Date</th>
+                    <th>Type</th>
+                    <th className="amount-column">Amount</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {transactions.map((transaction) => (
+                    <tr key={transaction.id}>
+                      <td>
+                        <div className="transaction-description">
+                          <span
+                            className={`transaction-type-icon ${
+                              transaction.type === "income"
+                                ? "type-income"
+                                : "type-expense"
+                            }`}
+                          >
+                            {transaction.type === "income" ? "↗" : "↘"}
+                          </span>
+
+                          <span>
+                            {transaction.description ||
+                              "Untitled transaction"}
+                          </span>
+                        </div>
+                      </td>
+
+                      <td>
+                        {transaction.transaction_date
+                          ? new Date(
+                              String(transaction.transaction_date).slice(
+                                0,
+                                10
+                              ) + "T12:00:00"
+                            ).toLocaleDateString("en-PH", {
+                              month: "short",
+                              day: "numeric",
+                              year: "numeric",
+                            })
+                          : "—"}
+                      </td>
+
+                      <td>
+                        <span
+                          className={`transaction-badge ${
+                            transaction.type === "income"
+                              ? "badge-income"
+                              : "badge-expense"
+                          }`}
+                        >
+                          {transaction.type}
+                        </span>
+                      </td>
+
+                      <td
+                        className={`amount-column ${
+                          transaction.type === "income"
+                            ? "amount-income"
+                            : "amount-expense"
+                        }`}
+                      >
+                        {transaction.type === "income" ? "+" : "−"}
+                        {money(transaction.amount)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+        <p className="dashboard-footer-note">
+          ExpenseTrack · Your personal finance overview
+        </p>
+      </main>
+    </div>
+  );
+}
+
+function App() {
+  const [currentUser, setCurrentUser] = useState(() => {
+    try {
+      const savedUser = sessionStorage.getItem("expenseTrackUser");
+      return savedUser ? JSON.parse(savedUser) : null;
+    } catch {
+      sessionStorage.removeItem("expenseTrackUser");
+      return null;
+    }
+  });
+
+  const [showAuth, setShowAuth] = useState(false);
+  const [authMode, setAuthMode] = useState("login");
+  const [authMessage, setAuthMessage] = useState("");
+  const [messageType, setMessageType] = useState("error");
+  const [loading, setLoading] = useState(false);
+
+  const openAuth = (mode) => {
+    setAuthMode(mode);
+    setAuthMessage("");
+    setMessageType("error");
+    setShowAuth(true);
+  };
+
+  const handleAuth = async (event) => {
+    event.preventDefault();
+    setAuthMessage("");
+
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+
+    const email = String(formData.get("email") || "")
+      .trim()
+      .toLowerCase();
+    const password = String(formData.get("password") || "");
+
+    if (authMode === "register") {
+      const full_name = String(formData.get("full_name") || "").trim();
+      const confirmPassword = String(
+        formData.get("confirmPassword") || ""
+      );
+
+      if (password.length < 8) {
+        setMessageType("error");
+        setAuthMessage("Password must be at least 8 characters.");
+        return;
+      }
+
+      if (password !== confirmPassword) {
+        setMessageType("error");
+        setAuthMessage("Passwords do not match.");
+        return;
+      }
+
+      await submitAuth("/register", {
+        full_name,
+        email,
+        password,
+      });
+    } else {
+      await submitAuth("/login", {
+        email,
+        password,
+      });
+    }
+  };
+
+  const submitAuth = async (endpoint, payload) => {
+    setLoading(true);
+    setAuthMessage("");
+
+    try {
+      const response = await fetch(`${API_URL}${endpoint}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setMessageType("error");
+        setAuthMessage(data.message || "Something went wrong.");
+        return;
+      }
+
+      if (endpoint === "/register") {
+        setMessageType("success");
+        setAuthMessage(
+          "Registration successful! You can now log in."
+        );
+        setAuthMode("login");
+        return;
+      }
+
+      if (!data.token || !data.user || !data.user.id) {
+        setMessageType("error");
+        setAuthMessage(
+          "Login response is missing user information or a token. Please check your backend login route."
+        );
+        return;
+      }
+
+      sessionStorage.setItem("expenseTrackToken", data.token);
+      sessionStorage.setItem(
+        "expenseTrackUser",
+        JSON.stringify(data.user)
+      );
+
+      setCurrentUser(data.user);
+      setShowAuth(false);
+      setAuthMessage("");
+    } catch (error) {
+      console.error("Authentication error:", error);
+      setMessageType("error");
+      setAuthMessage(
+        "Cannot connect to the server. Make sure your backend is running on port 5000."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLogout = () => {
+    sessionStorage.removeItem("expenseTrackToken");
+    sessionStorage.removeItem("expenseTrackUser");
+    setCurrentUser(null);
+    setAuthMessage("");
+    setShowAuth(false);
+    setAuthMode("login");
+  };
+
+  // Show the dashboard after successful login.
+  if (currentUser) {
+    return (
+      <DashboardView
+        user={currentUser}
+        onLogout={handleLogout}
+      />
+    );
+  }
+
+  // Show the landing page when the user is logged out.
+  return (
+    <div className="app">
+      {/* NAVBAR */}
+      <header className="navbar">
+        <div className="nav-container">
+          <div className="logo">
+            <div className="logo-icon">₱</div>
+            <span>
+              Expense<span>Track</span>
+            </span>
+          </div>
+
+          <nav className="nav-links">
+            <a href="#home">Home</a>
+            <a href="#features">Features</a>
+            <a href="#about">About</a>
+          </nav>
+
+          <div className="nav-actions">
+            <button
+              type="button"
+              className="login-nav-btn"
+              onClick={() => openAuth("login")}
+            >
+              Log In
+            </button>
+
+            <button
+              type="button"
+              className="signup-nav-btn"
+              onClick={() => openAuth("register")}
+            >
+              Get Started
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {/* HERO */}
+      <section className="hero" id="home">
+        <div className="hero-container">
+          <div className="hero-content">
+            <div className="hero-badge">
+              ✦ Smart Financial Management
+            </div>
+
+            <h1>
+              Take Control of
+              <br />
+              Your <span>Finances.</span>
+            </h1>
+
+            <p>
+              Track your income, manage expenses, set budgets,
+              and understand your spending habits—all in one
+              simple and organized platform.
+            </p>
+
+            <div className="hero-buttons">
+              <button
+                type="button"
+                className="primary-btn"
+                onClick={() => openAuth("register")}
+              >
+                Get Started <span>→</span>
+              </button>
+
+              <button
+                type="button"
+                className="secondary-btn"
+                onClick={() => openAuth("login")}
+              >
+                Log In
+              </button>
+            </div>
+
+            <div className="hero-note">
+              ✓ Simple &nbsp;•&nbsp; Secure &nbsp;•&nbsp; Easy to Use
+            </div>
+          </div>
+
+          {/* DASHBOARD PREVIEW */}
+          <div className="hero-preview">
+            <div className="preview-window">
+              <div className="preview-top">
+                <div className="preview-brand">
+                  <div className="mini-logo">₱</div>
+                  ExpenseTrack
+                </div>
+
+                <div className="preview-avatar">JD</div>
+              </div>
+
+              <div className="preview-body">
+                <div className="preview-heading">
+                  <div>
+                    <small>Welcome back,</small>
+                    <strong>Juan!</strong>
+                  </div>
+
+                  <div className="preview-date">October 2026</div>
+                </div>
+
+                <div className="preview-cards">
+                  <div className="preview-card income-card">
+                    <div className="card-label">Income</div>
+                    <div className="card-value">₱45,000</div>
+                    <div className="card-change">↑ 12.5%</div>
+                  </div>
+
+                  <div className="preview-card expense-card">
+                    <div className="card-label">Expenses</div>
+                    <div className="card-value">₱18,450</div>
+                    <div className="card-change">↓ 4.2%</div>
+                  </div>
+
+                  <div className="preview-card balance-card">
+                    <div className="card-label">Balance</div>
+                    <div className="card-value">₱26,550</div>
+                    <div className="card-change">Available</div>
+                  </div>
+                </div>
+
+                <div className="preview-chart">
+                  <div className="chart-header">
+                    <strong>Monthly Overview</strong>
+                    <span>Last 6 months</span>
+                  </div>
+
+                  <div className="chart">
+                    <div className="chart-bars">
+                      <div className="bar" style={{ height: "45%" }} />
+                      <div className="bar" style={{ height: "65%" }} />
+                      <div className="bar" style={{ height: "52%" }} />
+                      <div className="bar" style={{ height: "80%" }} />
+                      <div className="bar" style={{ height: "62%" }} />
+                      <div className="bar active" style={{ height: "90%" }} />
+                    </div>
+
+                    <div className="chart-labels">
+                      <span>May</span>
+                      <span>Jun</span>
+                      <span>Jul</span>
+                      <span>Aug</span>
+                      <span>Sep</span>
+                      <span>Oct</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="floating-card floating-income">
+              <span>↑</span>
+              <div>
+                <small>Income</small>
+                <strong>+₱8,500</strong>
+              </div>
+            </div>
+
+            <div className="floating-card floating-expense">
+              <span>↓</span>
+              <div>
+                <small>Expense</small>
+                <strong>-₱2,350</strong>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* FEATURES */}
+      <section className="features-section" id="features">
+        <div className="section-container">
+          <div className="section-heading">
+            <div className="section-tag">FEATURES</div>
+
+            <h2>
+              Everything You Need to
+              <span> Manage Your Money</span>
+            </h2>
+
+            <p>
+              Keep your finances organized and make better
+              financial decisions with simple tools.
+            </p>
+          </div>
+
+          <div className="feature-grid">
+            <div className="feature-card">
+              <div className="feature-icon income-icon">↗</div>
+              <h3>Income &amp; Expense Tracking</h3>
+              <p>
+                Easily record your daily income and expenses
+                with categories, dates, amounts, and descriptions.
+              </p>
+            </div>
+
+            <div className="feature-card">
+              <div className="feature-icon budget-icon">₱</div>
+              <h3>Budget Monitoring</h3>
+              <p>
+                Set monthly spending limits and monitor your
+                progress before you exceed your budget.
+              </p>
+            </div>
+
+            <div className="feature-card">
+              <div className="feature-icon report-icon">▥</div>
+              <h3>Financial Reports</h3>
+              <p>
+                Understand your spending patterns through
+                organized summaries and visual reports.
+              </p>
+            </div>
+
+            <div className="feature-card">
+              <div className="feature-icon secure-icon">✓</div>
+              <h3>Secure Records</h3>
+              <p>
+                Keep your financial information protected with
+                secure authentication and account management.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ABOUT */}
+      <section className="about-section" id="about">
+        <div className="about-container">
+          <div className="about-content">
+            <div className="section-tag">ABOUT EXPENSETRACK</div>
+
+            <h2>
+              Make Every Peso
+              <span> Count.</span>
+            </h2>
+
+            <p>
+              ExpenseTrack is a web-based financial management
+              system designed to help users organize their income
+              and expenses in one convenient place.
+            </p>
+
+            <p>
+              Instead of relying on notebooks or scattered records,
+              ExpenseTrack provides a simple dashboard where you
+              can monitor your financial activity and stay within
+              your budget.
+            </p>
+
+            <div className="about-points">
+              <div>✓ Easy transaction management</div>
+              <div>✓ Clear financial summaries</div>
+              <div>✓ Budget awareness</div>
+            </div>
+          </div>
+
+          <div className="about-visual">
+            <div className="money-circle">
+              <div className="money-symbol">₱</div>
+            </div>
+
+            <div className="about-stat stat-one">
+              <strong>100%</strong>
+              <span>Organized</span>
+            </div>
+
+            <div className="about-stat stat-two">
+              <strong>24/7</strong>
+              <span>Accessible</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* CTA */}
+      <section className="cta-section">
+        <div className="cta-container">
+          <div>
+            <h2>Ready to Take Control?</h2>
+            <p>Start organizing your finances today.</p>
+          </div>
+
+          <button
+            type="button"
+            className="cta-button"
+            onClick={() => openAuth("register")}
+          >
+            Create Free Account →
+          </button>
+        </div>
+      </section>
+
+      {/* FOOTER */}
+      <footer className="footer">
+        <div className="footer-container">
+          <div className="footer-brand">
+            <div className="logo">
+              <div className="logo-icon">₱</div>
+              <span>
+                Expense<span>Track</span>
+              </span>
+            </div>
+
+            <p>
+              Simple financial management for everyday life.
+            </p>
+          </div>
+
+          <div className="footer-links">
+            <a href="#home">Home</a>
+            <a href="#features">Features</a>
+            <a href="#about">About</a>
+          </div>
+        </div>
+
+        <div className="footer-bottom">
+          © 2026 ExpenseTrack. All rights reserved.
+        </div>
+      </footer>
+
+      {/* LOGIN / REGISTER MODAL */}
+      {showAuth && (
+        <div
+          className="auth-overlay"
+          onClick={() => {
+            if (!loading) setShowAuth(false);
+          }}
+        >
+          <div
+            className="auth-modal"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="close-btn"
+              onClick={() => setShowAuth(false)}
+              disabled={loading}
+              aria-label="Close"
+            >
+              ×
+            </button>
+
+            <div className="auth-logo">
+              <div className="logo-icon">₱</div>
+              <span>
+                Expense<span>Track</span>
+              </span>
+            </div>
+
+            <h2>
+              {authMode === "login"
+                ? "Welcome Back"
+                : "Create Your Account"}
+            </h2>
+
+            <p className="auth-subtitle">
+              {authMode === "login"
+                ? "Sign in to manage your finances."
+                : "Start managing your finances today."}
+            </p>
+
+            {authMessage && (
+              <div
+                role="alert"
+                style={{
+                  padding: "10px 12px",
+                  marginBottom: "14px",
+                  borderRadius: "8px",
+                  fontSize: "14px",
+                  color:
+                    messageType === "success" ? "#166534" : "#b91c1c",
+                  background:
+                    messageType === "success" ? "#dcfce7" : "#fee2e2",
+                }}
+              >
+                {authMessage}
+              </div>
+            )}
+
+            <form onSubmit={handleAuth}>
+              {authMode === "register" && (
+                <>
+                  <label htmlFor="register-full-name">Full Name</label>
+                  <input
+                    id="register-full-name"
+                    type="text"
+                    name="full_name"
+                    placeholder="Enter your full name"
+                    autoComplete="name"
+                    required
+                  />
+                </>
+              )}
+
+              <label htmlFor="auth-email">Email Address</label>
+              <input
+                id="auth-email"
+                type="email"
+                name="email"
+                placeholder="Enter your email"
+                autoComplete="email"
+                required
+              />
+
+              <label htmlFor="auth-password">Password</label>
+              <input
+                id="auth-password"
+                type="password"
+                name="password"
+                placeholder={
+                  authMode === "login"
+                    ? "Enter your password"
+                    : "Create a password (at least 8 characters)"
+                }
+                autoComplete={
+                  authMode === "login"
+                    ? "current-password"
+                    : "new-password"
+                }
+                minLength={authMode === "register" ? 8 : undefined}
+                required
+              />
+
+              {authMode === "register" && (
+                <>
+                  <label htmlFor="confirm-password">
+                    Confirm Password
+                  </label>
+                  <input
+                    id="confirm-password"
+                    type="password"
+                    name="confirmPassword"
+                    placeholder="Confirm your password"
+                    autoComplete="new-password"
+                    minLength={8}
+                    required
+                  />
+                </>
+              )}
+
+              <button
+                type="submit"
+                className="auth-submit"
+                disabled={loading}
+              >
+                {loading
+                  ? "Please wait..."
+                  : authMode === "login"
+                    ? "Log In"
+                    : "Create Account"}
+              </button>
+            </form>
+
+            <p className="switch-auth">
+              {authMode === "login"
+                ? "Don't have an account?"
+                : "Already have an account?"}
+
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => {
+                  setAuthMode(
+                    authMode === "login" ? "register" : "login"
+                  );
+                  setAuthMessage("");
+                  setMessageType("error");
+                }}
+              >
+                {authMode === "login" ? "Create one" : "Log in"}
+              </button>
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default App;
