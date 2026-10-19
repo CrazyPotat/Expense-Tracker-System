@@ -5,7 +5,16 @@ import './App.css';
 const API_URL = "https://expense-tracker-system-qju2.onrender.com/api/auth";
 const TRANSACTION_API_URL = "https://expense-tracker-system-qju2.onrender.com/api/transactions";
 
+
 function DashboardView({ user, onLogout }) {
+  const getToday = () => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, "0");
+    const day = String(today.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
   const [summary, setSummary] = useState({
     totalIncome: 0,
     totalExpenses: 0,
@@ -13,7 +22,17 @@ function DashboardView({ user, onLogout }) {
   });
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [showForm, setShowForm] = useState(false);
+  const [formType, setFormType] = useState("expense");
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [form, setForm] = useState({
+    amount: "",
+    transaction_date: getToday(),
+    description: "",
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -40,7 +59,7 @@ function DashboardView({ user, onLogout }) {
 
         if (!summaryResponse.ok) {
           throw new Error(
-            summaryData.message || "Failed to load financial summary."
+            summaryData.message || "Failed to load summary."
           );
         }
 
@@ -65,12 +84,10 @@ function DashboardView({ user, onLogout }) {
         );
       } catch (err) {
         if (!cancelled) {
-          setError(err.message || "Unable to load dashboard data.");
+          setError(err.message || "Unable to load dashboard.");
         }
       } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        if (!cancelled) setLoading(false);
       }
     }
 
@@ -84,13 +101,85 @@ function DashboardView({ user, onLogout }) {
     return () => {
       cancelled = true;
     };
-  }, [user?.id]);
+  }, [user?.id, refreshKey]);
 
   const money = (amount) =>
     Number(amount).toLocaleString("en-PH", {
       style: "currency",
       currency: "PHP",
     });
+
+  const openForm = (type) => {
+    setFormType(type);
+    setForm({
+      amount: "",
+      transaction_date: getToday(),
+      description: "",
+    });
+    setNotice("");
+    setShowForm(true);
+  };
+
+  const handleFormChange = (event) => {
+    const { name, value } = event.target;
+    setForm((previous) => ({
+      ...previous,
+      [name]: value,
+    }));
+  };
+
+  const handleSaveTransaction = async (event) => {
+    event.preventDefault();
+    setNotice("");
+
+    const amount = Number(form.amount);
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setNotice("Please enter an amount greater than zero.");
+      return;
+    }
+
+    if (!form.transaction_date) {
+      setNotice("Please select a transaction date.");
+      return;
+    }
+
+    setSaving(true);
+
+    try {
+      const response = await fetch(TRANSACTION_API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          user_id: user.id,
+          type: formType,
+          amount,
+          transaction_date: form.transaction_date,
+          description: form.description.trim(),
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.message || "Failed to save transaction."
+        );
+      }
+
+      setShowForm(false);
+      setNotice(
+        `${formType === "income" ? "Income" : "Expense"} saved successfully!`
+      );
+      setRefreshKey((previous) => previous + 1);
+    } catch (err) {
+      setNotice(err.message || "Unable to save transaction.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const firstName = user.full_name?.split(" ")[0] || "User";
 
@@ -137,6 +226,12 @@ function DashboardView({ user, onLogout }) {
           </div>
         )}
 
+        {notice && (
+          <div className="transaction-notice" role="status">
+            {notice}
+          </div>
+        )}
+
         <section className="dashboard-summary">
           <article className="summary-card summary-income">
             <div className="summary-card-top">
@@ -166,6 +261,114 @@ function DashboardView({ user, onLogout }) {
           </article>
         </section>
 
+        <section className="transaction-actions">
+          <div>
+            <h2>Manage Transactions</h2>
+            <p>Record your income and daily expenses.</p>
+          </div>
+
+          <div className="transaction-action-buttons">
+            <button
+              type="button"
+              className="add-income-button"
+              onClick={() => openForm("income")}
+            >
+              + Add Income
+            </button>
+
+            <button
+              type="button"
+              className="add-expense-button"
+              onClick={() => openForm("expense")}
+            >
+              + Add Expense
+            </button>
+          </div>
+        </section>
+
+        {showForm && (
+          <section className="transaction-form-panel">
+            <h2>
+              Add {formType === "income" ? "Income" : "Expense"}
+            </h2>
+
+            <form onSubmit={handleSaveTransaction}>
+              <div className="transaction-form-grid">
+                <label className="transaction-form-field">
+                  Transaction Type
+                  <select
+                    value={formType}
+                    onChange={(event) => setFormType(event.target.value)}
+                  >
+                    <option value="income">Income</option>
+                    <option value="expense">Expense</option>
+                  </select>
+                </label>
+
+                <label className="transaction-form-field">
+                  Amount (₱)
+                  <input
+                    type="number"
+                    name="amount"
+                    min="0.01"
+                    step="0.01"
+                    value={form.amount}
+                    onChange={handleFormChange}
+                    placeholder="e.g. 150.00"
+                    required
+                  />
+                </label>
+
+                <label className="transaction-form-field">
+                  Date
+                  <input
+                    type="date"
+                    name="transaction_date"
+                    value={form.transaction_date}
+                    onChange={handleFormChange}
+                    required
+                  />
+                </label>
+
+                <label className="transaction-form-field">
+                  Description
+                  <input
+                    type="text"
+                    name="description"
+                    maxLength="255"
+                    value={form.description}
+                    onChange={handleFormChange}
+                    placeholder={
+                      formType === "income"
+                        ? "e.g. Allowance"
+                        : "e.g. Food"
+                    }
+                  />
+                </label>
+              </div>
+
+              <div className="transaction-form-buttons">
+                <button
+                  type="button"
+                  className="cancel-transaction-button"
+                  onClick={() => setShowForm(false)}
+                  disabled={saving}
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="submit"
+                  className="save-transaction-button"
+                  disabled={saving}
+                >
+                  {saving ? "Saving..." : "Save Transaction"}
+                </button>
+              </div>
+            </form>
+          </section>
+        )}
+
         <section className="transactions-panel">
           <div className="transactions-panel-heading">
             <div>
@@ -178,9 +381,7 @@ function DashboardView({ user, onLogout }) {
           </div>
 
           {loading ? (
-            <div className="dashboard-empty">
-              Loading transactions...
-            </div>
+            <div className="dashboard-empty">Loading transactions...</div>
           ) : error ? (
             <div className="dashboard-empty">
               Transactions could not be loaded.
@@ -190,8 +391,7 @@ function DashboardView({ user, onLogout }) {
               <div className="empty-icon">₱</div>
               <h3>No transactions yet</h3>
               <p>
-                Once you have recorded income or expenses, they will
-                appear here.
+                Use Add Income or Add Expense to record your first transaction.
               </p>
             </div>
           ) : (
@@ -205,7 +405,6 @@ function DashboardView({ user, onLogout }) {
                     <th className="amount-column">Amount</th>
                   </tr>
                 </thead>
-
                 <tbody>
                   {transactions.map((transaction) => (
                     <tr key={transaction.id}>
@@ -220,21 +419,16 @@ function DashboardView({ user, onLogout }) {
                           >
                             {transaction.type === "income" ? "↗" : "↘"}
                           </span>
-
                           <span>
-                            {transaction.description ||
-                              "Untitled transaction"}
+                            {transaction.description || "Untitled transaction"}
                           </span>
                         </div>
                       </td>
-
                       <td>
                         {transaction.transaction_date
                           ? new Date(
-                              String(transaction.transaction_date).slice(
-                                0,
-                                10
-                              ) + "T12:00:00"
+                              String(transaction.transaction_date).slice(0, 10) +
+                                "T12:00:00"
                             ).toLocaleDateString("en-PH", {
                               month: "short",
                               day: "numeric",
@@ -242,7 +436,6 @@ function DashboardView({ user, onLogout }) {
                             })
                           : "—"}
                       </td>
-
                       <td>
                         <span
                           className={`transaction-badge ${
@@ -254,7 +447,6 @@ function DashboardView({ user, onLogout }) {
                           {transaction.type}
                         </span>
                       </td>
-
                       <td
                         className={`amount-column ${
                           transaction.type === "income"
@@ -280,6 +472,7 @@ function DashboardView({ user, onLogout }) {
     </div>
   );
 }
+
 
 function App() {
   const [currentUser, setCurrentUser] = useState(() => {

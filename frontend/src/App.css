@@ -2003,3 +2003,148 @@ section {
     font-size: 17px;
   }
 }
+
+/* Transaction entry controls */
+.transaction-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 18px;
+  margin: 26px 0;
+  padding: 22px;
+  border: 1px solid #e9eaf5;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(37, 41, 87, 0.04);
+}
+
+.transaction-actions h2,
+.transaction-form-panel h2 {
+  margin: 0 0 7px;
+  color: #202744;
+  font-size: 19px;
+}
+
+.transaction-actions p {
+  margin: 0;
+  color: #778099;
+  font-size: 13px;
+}
+
+.transaction-action-buttons,
+.transaction-form-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.add-income-button,
+.add-expense-button,
+.save-transaction-button,
+.cancel-transaction-button {
+  min-height: 43px;
+  padding: 0 17px;
+  border-radius: 10px;
+  font-weight: 700;
+  border: 1px solid transparent;
+}
+
+.add-income-button {
+  color: #147a50;
+  background: #e6f9ef;
+  border-color: #c9efd9;
+}
+
+.add-expense-button {
+  color: #fff;
+  background: #6553df;
+}
+
+.transaction-form-panel {
+  margin: 0 0 26px;
+  padding: 24px;
+  border: 1px solid #e6e3fb;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(37, 41, 87, 0.04);
+}
+
+.transaction-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  margin: 20px 0;
+}
+
+.transaction-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: #424b66;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.transaction-form-field input,
+.transaction-form-field select {
+  width: 100%;
+  min-height: 45px;
+  padding: 10px 12px;
+  border: 1px solid #dfe2ed;
+  border-radius: 9px;
+  outline: none;
+  background: #fff;
+  color: #202744;
+  font-size: 14px;
+}
+
+.transaction-form-field input:focus,
+.transaction-form-field select:focus {
+  border-color: #7765f4;
+  box-shadow: 0 0 0 3px rgba(102, 84, 232, 0.12);
+}
+
+.transaction-form-buttons {
+  justify-content: flex-end;
+}
+
+.save-transaction-button {
+  color: #fff;
+  background: #6553df;
+}
+
+.cancel-transaction-button {
+  color: #525c76;
+  background: #fff;
+  border-color: #dfe2ed;
+}
+
+.transaction-notice {
+  margin: 15px 0;
+  padding: 12px 15px;
+  border-radius: 10px;
+  color: #176b48;
+  background: #e6f9ef;
+  font-size: 14px;
+}
+
+@media (max-width: 600px) {
+  .transaction-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .transaction-action-buttons {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .transaction-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .transaction-form-panel {
+    padding: 18px;
+  }
+}
