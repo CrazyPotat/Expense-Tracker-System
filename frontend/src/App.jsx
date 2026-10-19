@@ -181,6 +181,39 @@ function DashboardView({ user, onLogout }) {
     }
   };
 
+  
+const handleDeleteTransaction = async (transaction) => {
+  const confirmed = window.confirm(
+    `Delete "${transaction.description || "Untitled transaction"}" (${money(transaction.amount)})?`
+  );
+
+  if (!confirmed) return;
+
+  setNotice("");
+  setError("");
+
+  try {
+    const response = await fetch(
+      `${TRANSACTION_API_URL}/${transaction.id}?user_id=${encodeURIComponent(user.id)}`,
+      {
+        method: "DELETE",
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || "Failed to delete transaction.");
+    }
+
+    setNotice("Transaction deleted successfully!");
+    setRefreshKey((previous) => previous + 1);
+  } catch (err) {
+    setError(err.message || "Unable to delete transaction.");
+  }
+};
+
+
   const firstName = user.full_name?.split(" ")[0] || "User";
 
   return (
@@ -403,62 +436,82 @@ function DashboardView({ user, onLogout }) {
                     <th>Date</th>
                     <th>Type</th>
                     <th className="amount-column">Amount</th>
+<th>Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {transactions.map((transaction) => (
-                    <tr key={transaction.id}>
-                      <td>
-                        <div className="transaction-description">
-                          <span
-                            className={`transaction-type-icon ${
-                              transaction.type === "income"
-                                ? "type-income"
-                                : "type-expense"
-                            }`}
-                          >
-                            {transaction.type === "income" ? "↗" : "↘"}
-                          </span>
-                          <span>
-                            {transaction.description || "Untitled transaction"}
-                          </span>
-                        </div>
-                      </td>
-                      <td>
-                        {transaction.transaction_date
-                          ? new Date(
-                              String(transaction.transaction_date).slice(0, 10) +
-                                "T12:00:00"
-                            ).toLocaleDateString("en-PH", {
-                              month: "short",
-                              day: "numeric",
-                              year: "numeric",
-                            })
-                          : "—"}
-                      </td>
-                      <td>
-                        <span
-                          className={`transaction-badge ${
-                            transaction.type === "income"
-                              ? "badge-income"
-                              : "badge-expense"
-                          }`}
-                        >
-                          {transaction.type}
-                        </span>
-                      </td>
-                      <td
-                        className={`amount-column ${
-                          transaction.type === "income"
-                            ? "amount-income"
-                            : "amount-expense"
-                        }`}
-                      >
-                        {transaction.type === "income" ? "+" : "−"}
-                        {money(transaction.amount)}
-                      </td>
-                    </tr>
-                  ))}
+  <tr key={transaction.id}>
+    {/* Description */}
+    <td>
+      <div className="transaction-description">
+        <span
+          className={`transaction-type-icon ${
+            transaction.type === "income"
+              ? "type-income"
+              : "type-expense"
+          }`}
+        >
+          {transaction.type === "income" ? "↗" : "↘"}
+        </span>
+
+        <span>
+          {transaction.description || "Untitled transaction"}
+        </span>
+      </div>
+    </td>
+
+    {/* Date */}
+    <td>
+      {transaction.transaction_date
+        ? new Date(
+            String(transaction.transaction_date).slice(0, 10) +
+              "T12:00:00"
+          ).toLocaleDateString("en-PH", {
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+          })
+        : "—"}
+    </td>
+
+    {/* Type */}
+    <td>
+      <span
+        className={`transaction-type-badge ${
+          transaction.type === "income"
+            ? "badge-income"
+            : "badge-expense"
+        }`}
+      >
+        {transaction.type === "income" ? "Income" : "Expense"}
+      </span>
+    </td>
+
+    {/* Amount */}
+    <td
+      className={`amount-column ${
+        transaction.type === "income"
+          ? "amount-income"
+          : "amount-expense"
+      }`}
+    >
+      {transaction.type === "income" ? "+" : "−"}
+      {money(transaction.amount)}
+    </td>
+
+    {/* Action */}
+    <td>
+      <button
+        type="button"
+        className="delete-transaction-button"
+        onClick={() => handleDeleteTransaction(transaction)}
+      >
+        Delete
+      </button>
+    </td>
+  </tr>
+))}
                 </tbody>
               </table>
             </div>
@@ -472,6 +525,7 @@ function DashboardView({ user, onLogout }) {
     </div>
   );
 }
+
 
 
 function App() {
