@@ -2,8 +2,8 @@
 import { useEffect, useState } from "react";
 import './App.css';
 
-const API_URL = "http://localhost:5000/api/auth";
-const TRANSACTION_API_URL = "http://localhost:5000/api/transactions";
+const API_URL = "https://expense-tracker-system-qju2.onrender.com/api/auth";
+const TRANSACTION_API_URL = "https://expense-tracker-system-qju2.onrender.com/api/transactions";
 
 function DashboardView({ user, onLogout }) {
   const [summary, setSummary] = useState({
