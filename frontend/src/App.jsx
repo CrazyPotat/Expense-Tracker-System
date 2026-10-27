@@ -3,7 +3,8 @@ import { useEffect, useState } from "react";
 import './App.css';
 
 const API_URL = "https://expense-tracker-system-qju2.onrender.com/api/auth";
-const TRANSACTION_API_URL = "https://expense-tracker-system-qju2.onrender.com/api/transactions";
+const TRANSACTION_API_URL =
+  "https://expense-tracker-system-qju2.onrender.com/api/transactions";
 
 
 function DashboardView({ user, onLogout }) {
@@ -146,59 +147,80 @@ function DashboardView({ user, onLogout }) {
       [name]: value,
     }));
   };
+  
+  
+const handleSaveTransaction = async (event) => {
+  event.preventDefault();
+  setNotice("");
+  setError("");
 
-  const handleSaveTransaction = async (event) => {
-    event.preventDefault();
-    setNotice("");
+  const amount = Number(form.amount);
 
-    const amount = Number(form.amount);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    setError("Please enter an amount greater than zero.");
+    return;
+  }
 
-    if (!Number.isFinite(amount) || amount <= 0) {
-      setNotice("Please enter an amount greater than zero.");
-      return;
-    }
+  if (!form.transaction_date) {
+    setError("Please select a transaction date.");
+    return;
+  }
 
-    if (!form.transaction_date) {
-      setNotice("Please select a transaction date.");
-      return;
-    }
+  setSaving(true);
 
-    setSaving(true);
+  try {
+    const isEditing = editingTransactionId !== null;
 
-    try {
-      const response = await fetch(TRANSACTION_API_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          user_id: user.id,
-          type: formType,
-          amount,
-          transaction_date: form.transaction_date,
-          description: form.description.trim(),
-        }),
-      });
+    const url = isEditing
+      ? `${TRANSACTION_API_URL}/${editingTransactionId}?user_id=${encodeURIComponent(user.id)}`
+      : TRANSACTION_API_URL;
 
-      const data = await response.json();
+    const response = await fetch(url, {
+      method: isEditing ? "PUT" : "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        user_id: user.id,
+        type: formType,
+        amount,
+        transaction_date: form.transaction_date,
+        description: form.description.trim(),
+      }),
+    });
 
-      if (!response.ok) {
-        throw new Error(
-          data.message || "Failed to save transaction."
-        );
-      }
+    const data = await response.json();
 
-      setShowForm(false);
-      setNotice(
-        `${formType === "income" ? "Income" : "Expense"} saved successfully!`
+    if (!response.ok) {
+      throw new Error(
+        data.message ||
+          (isEditing
+            ? "Failed to update transaction."
+            : "Failed to save transaction.")
       );
-      setRefreshKey((previous) => previous + 1);
-    } catch (err) {
-      setNotice(err.message || "Unable to save transaction.");
-    } finally {
-      setSaving(false);
     }
-  };
+
+    setShowForm(false);
+    setEditingTransactionId(null);
+    setForm({
+      amount: "",
+      transaction_date: getToday(),
+      description: "",
+    });
+
+    setNotice(
+      isEditing
+        ? "Transaction updated successfully!"
+        : `${formType === "income" ? "Income" : "Expense"} saved successfully!`
+    );
+
+    setRefreshKey((previous) => previous + 1);
+  } catch (err) {
+    setError(err.message || "Unable to save transaction.");
+  } finally {
+    setSaving(false);
+  }
+};
 
   
 const handleDeleteTransaction = async (transaction) => {
@@ -341,7 +363,9 @@ const handleDeleteTransaction = async (transaction) => {
         {showForm && (
           <section className="transaction-form-panel">
             <h2>
-              Add {formType === "income" ? "Income" : "Expense"}
+                {editingTransactionId !== null
+    ? "Edit Transaction"
+    : `Add ${formType === "income" ? "Income" : "Expense"}`}
             </h2>
 
             <form onSubmit={handleSaveTransaction}>
@@ -400,23 +424,30 @@ const handleDeleteTransaction = async (transaction) => {
               </div>
 
               <div className="transaction-form-buttons">
-                <button
-                  type="button"
-                  className="cancel-transaction-button"
-                  onClick={() => setShowForm(false)}
-                  disabled={saving}
-                >
-                  Cancel
-                </button>
+  <button
+    type="button"
+    className="cancel-transaction-button"
+    onClick={() => {
+      setShowForm(false);
+      setEditingTransactionId(null);
+    }}
+    disabled={saving}
+  >
+    Cancel
+  </button>
 
-                <button
-                  type="submit"
-                  className="save-transaction-button"
-                  disabled={saving}
-                >
-                  {saving ? "Saving..." : "Save Transaction"}
-                </button>
-              </div>
+  <button
+    type="submit"
+    className="save-transaction-button"
+    disabled={saving}
+  >
+    {saving
+      ? "Saving..."
+      : editingTransactionId !== null
+        ? "Save Changes"
+        : "Save Transaction"}
+  </button>
+</div>
             </form>
           </section>
         )}
@@ -518,19 +549,30 @@ const handleDeleteTransaction = async (transaction) => {
       {transaction.type === "income" ? "+" : "−"}
       {money(transaction.amount)}
     </td>
-
-    {/* Action */}
+   
+    {/* Actions */}
     <td>
-      <button
-        type="button"
-        className="delete-transaction-button"
-        onClick={() => handleDeleteTransaction(transaction)}
-      >
-        Delete
-      </button>
+      <div className="transaction-row-actions">
+        <button
+          type="button"
+          className="edit-transaction-button"
+          onClick={() => openEditForm(transaction)}
+        >
+          Edit
+        </button>
+
+        <button
+          type="button"
+          className="delete-transaction-button"
+          onClick={() => handleDeleteTransaction(transaction)}
+        >
+          Delete
+        </button>
+      </div>
     </td>
   </tr>
 ))}
+
                 </tbody>
               </table>
             </div>

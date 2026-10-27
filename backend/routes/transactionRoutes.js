@@ -143,6 +143,94 @@ router.post('/', async (req, res) => {
         });
     }
 });
+// EDIT TRANSACTION
+router.put('/:id', async (req, res) => {
+    try {
+        const userId = getUserId(req.query.user_id ?? req.body.user_id);
+        const transactionId = getUserId(req.params.id);
+
+        const type = String(req.body.type || '').toLowerCase();
+        const amount = Number(req.body.amount);
+        const date = String(req.body.transaction_date || '');
+        const description = String(req.body.description || '').trim();
+
+        if (!userId || !transactionId) {
+            return res.status(400).json({
+                message: 'Valid user and transaction IDs are required.'
+            });
+        }
+
+        if (!['income', 'expense'].includes(type)) {
+            return res.status(400).json({
+                message: 'Choose income or expense.'
+            });
+        }
+
+        if (
+            req.body.amount === '' ||
+            req.body.amount === null ||
+            req.body.amount === undefined ||
+            !Number.isFinite(amount) ||
+            amount <= 0
+        ) {
+            return res.status(400).json({
+                message: 'Amount must be greater than zero.'
+            });
+        }
+
+        if (
+            !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
+            Number.isNaN(Date.parse(date + 'T00:00:00Z'))
+        ) {
+            return res.status(400).json({
+                message: 'Enter a valid date.'
+            });
+        }
+
+        if (description.length > 255) {
+            return res.status(400).json({
+                message: 'Description must not exceed 255 characters.'
+            });
+        }
+
+        const [result] = await db.execute(
+            `UPDATE transactions
+             SET type = ?, amount = ?, transaction_date = ?, description = ?
+             WHERE id = ? AND user_id = ?`,
+            [
+                type,
+                amount.toFixed(2),
+                date,
+                description || null,
+                transactionId,
+                userId
+            ]
+        );
+
+        if (result.affectedRows === 0) {
+            const [rows] = await db.execute(
+                `SELECT id FROM transactions
+                 WHERE id = ? AND user_id = ?`,
+                [transactionId, userId]
+            );
+
+            if (rows.length === 0) {
+                return res.status(404).json({
+                    message: 'Transaction not found.'
+                });
+            }
+        }
+
+        res.json({
+            message: 'Transaction updated successfully!'
+        });
+    } catch (error) {
+        console.error('Update transaction error:', error.message);
+        res.status(500).json({
+            message: 'Failed to update transaction.'
+        });
+    }
+});
 
 // DELETE: Delete one of the current user's transactions
 router.delete('/:id', async (req, res) => {
