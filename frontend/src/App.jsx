@@ -26,6 +26,7 @@ function DashboardView({ user, onLogout }) {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [showForm, setShowForm] = useState(false);
+  const [editingTransactionId, setEditingTransactionId] = useState(null);
   const [formType, setFormType] = useState("expense");
   const [refreshKey, setRefreshKey] = useState(0);
   const [form, setForm] = useState({
@@ -109,7 +110,9 @@ function DashboardView({ user, onLogout }) {
       currency: "PHP",
     });
 
+ 
   const openForm = (type) => {
+    setEditingTransactionId(null);
     setFormType(type);
     setForm({
       amount: "",
@@ -117,6 +120,22 @@ function DashboardView({ user, onLogout }) {
       description: "",
     });
     setNotice("");
+    setError("");
+    setShowForm(true);
+  };
+
+  const openEditForm = (transaction) => {
+    setEditingTransactionId(transaction.id);
+    setFormType(transaction.type);
+    setForm({
+      amount: String(transaction.amount ?? ""),
+      transaction_date: String(
+        transaction.transaction_date ?? ""
+      ).slice(0, 10),
+      description: transaction.description || "",
+    });
+    setNotice("");
+    setError("");
     setShowForm(true);
   };
 
@@ -544,11 +563,15 @@ function App() {
   const [authMessage, setAuthMessage] = useState("");
   const [messageType, setMessageType] = useState("error");
   const [loading, setLoading] = useState(false);
+  const [otpStep, setOtpStep] = useState(false);
+  const [otpEmail, setOtpEmail] = useState("");
 
   const openAuth = (mode) => {
     setAuthMode(mode);
     setAuthMessage("");
     setMessageType("error");
+    setOtpStep(false);
+    setOtpEmail("");
     setShowAuth(true);
   };
 
@@ -556,8 +579,20 @@ function App() {
     event.preventDefault();
     setAuthMessage("");
 
-    const form = event.currentTarget;
-    const formData = new FormData(form);
+    const formData = new FormData(event.currentTarget);
+
+    // Step 2: submit the OTP sent to the user's email.
+    if (otpStep) {
+      const otp = String(formData.get("otp") || "").trim();
+      if (!/^\d{6}$/.test(otp)) {
+        setMessageType("error");
+        setAuthMessage("Please enter the 6-digit OTP from your email.");
+        return;
+      }
+
+      await submitAuth("/verify-otp", { email: otpEmail, otp });
+      return;
+    }
 
     const email = String(formData.get("email") || "")
       .trim()
@@ -582,6 +617,7 @@ function App() {
         return;
       }
 
+      setOtpEmail(email);
       await submitAuth("/register", {
         full_name,
         email,
@@ -617,11 +653,19 @@ function App() {
       }
 
       if (endpoint === "/register") {
+        setOtpStep(true);
         setMessageType("success");
         setAuthMessage(
-          "Registration successful! You can now log in."
+          `We sent a 6-digit verification code to ${otpEmail || payload.email}. Check your inbox and spam folder.`
         );
+        return;
+      }
+
+      if (endpoint === "/verify-otp") {
+        setOtpStep(false);
         setAuthMode("login");
+        setMessageType("success");
+        setAuthMessage("Email verified and account created! You can now log in.");
         return;
       }
 
@@ -646,7 +690,7 @@ function App() {
       console.error("Authentication error:", error);
       setMessageType("error");
       setAuthMessage(
-        "Cannot connect to the server. Make sure your backend is running on port 5000."
+        "Cannot connect to the ExpenseTrack server. Please try again in a moment."
       );
     } finally {
       setLoading(false);
@@ -660,6 +704,8 @@ function App() {
     setAuthMessage("");
     setShowAuth(false);
     setAuthMode("login");
+    setOtpStep(false);
+    setOtpEmail("");
   };
 
   // Show the dashboard after successful login.
@@ -1011,7 +1057,12 @@ function App() {
             <button
               type="button"
               className="close-btn"
-              onClick={() => setShowAuth(false)}
+              onClick={() => {
+                if (!loading) {
+                  setShowAuth(false);
+                  setOtpStep(false);
+                }
+              }}
               disabled={loading}
               aria-label="Close"
             >
@@ -1026,15 +1077,19 @@ function App() {
             </div>
 
             <h2>
-              {authMode === "login"
-                ? "Welcome Back"
-                : "Create Your Account"}
+              {otpStep
+                ? "Verify Your Email"
+                : authMode === "login"
+                  ? "Welcome Back"
+                  : "Create Your Account"}
             </h2>
 
             <p className="auth-subtitle">
-              {authMode === "login"
-                ? "Sign in to manage your finances."
-                : "Start managing your finances today."}
+              {otpStep
+                ? `Enter the 6-digit code sent to ${otpEmail}.`
+                : authMode === "login"
+                  ? "Sign in to manage your finances."
+                  : "Start managing your finances today."}
             </p>
 
             {authMessage && (
@@ -1056,63 +1111,88 @@ function App() {
             )}
 
             <form onSubmit={handleAuth}>
-              {authMode === "register" && (
+              {otpStep ? (
                 <>
-                  <label htmlFor="register-full-name">Full Name</label>
+                  <label htmlFor="verification-otp">Email Verification Code</label>
                   <input
-                    id="register-full-name"
+                    id="verification-otp"
                     type="text"
-                    name="full_name"
-                    placeholder="Enter your full name"
-                    autoComplete="name"
+                    name="otp"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    pattern="[0-9]{6}"
+                    maxLength={6}
+                    placeholder="Enter 6-digit OTP"
+                    aria-label="6-digit email verification code"
                     required
+                    autoFocus
                   />
+                  <p className="auth-subtitle" style={{ marginTop: "8px" }}>
+                    The code expires in 5 minutes. If you do not see the email,
+                    check your spam folder.
+                  </p>
                 </>
-              )}
-
-              <label htmlFor="auth-email">Email Address</label>
-              <input
-                id="auth-email"
-                type="email"
-                name="email"
-                placeholder="Enter your email"
-                autoComplete="email"
-                required
-              />
-
-              <label htmlFor="auth-password">Password</label>
-              <input
-                id="auth-password"
-                type="password"
-                name="password"
-                placeholder={
-                  authMode === "login"
-                    ? "Enter your password"
-                    : "Create a password (at least 8 characters)"
-                }
-                autoComplete={
-                  authMode === "login"
-                    ? "current-password"
-                    : "new-password"
-                }
-                minLength={authMode === "register" ? 8 : undefined}
-                required
-              />
-
-              {authMode === "register" && (
+              ) : (
                 <>
-                  <label htmlFor="confirm-password">
-                    Confirm Password
-                  </label>
+                  {authMode === "register" && (
+                    <>
+                      <label htmlFor="register-full-name">Full Name</label>
+                      <input
+                        id="register-full-name"
+                        type="text"
+                        name="full_name"
+                        placeholder="Enter your full name"
+                        autoComplete="name"
+                        required
+                      />
+                    </>
+                  )}
+
+                  <label htmlFor="auth-email">Email Address</label>
                   <input
-                    id="confirm-password"
-                    type="password"
-                    name="confirmPassword"
-                    placeholder="Confirm your password"
-                    autoComplete="new-password"
-                    minLength={8}
+                    id="auth-email"
+                    type="email"
+                    name="email"
+                    placeholder="Enter your email"
+                    autoComplete="email"
                     required
                   />
+
+                  <label htmlFor="auth-password">Password</label>
+                  <input
+                    id="auth-password"
+                    type="password"
+                    name="password"
+                    placeholder={
+                      authMode === "login"
+                        ? "Enter your password"
+                        : "Create a password (at least 8 characters)"
+                    }
+                    autoComplete={
+                      authMode === "login"
+                        ? "current-password"
+                        : "new-password"
+                    }
+                    minLength={authMode === "register" ? 8 : undefined}
+                    required
+                  />
+
+                  {authMode === "register" && (
+                    <>
+                      <label htmlFor="confirm-password">
+                        Confirm Password
+                      </label>
+                      <input
+                        id="confirm-password"
+                        type="password"
+                        name="confirmPassword"
+                        placeholder="Confirm your password"
+                        autoComplete="new-password"
+                        minLength={8}
+                        required
+                      />
+                    </>
+                  )}
                 </>
               )}
 
@@ -1123,31 +1203,35 @@ function App() {
               >
                 {loading
                   ? "Please wait..."
-                  : authMode === "login"
-                    ? "Log In"
-                    : "Create Account"}
+                  : otpStep
+                    ? "Verify Email"
+                    : authMode === "login"
+                      ? "Log In"
+                      : "Send Verification Code"}
               </button>
             </form>
 
-            <p className="switch-auth">
-              {authMode === "login"
-                ? "Don't have an account?"
-                : "Already have an account?"}
+            {!otpStep && (
+              <p className="switch-auth">
+                {authMode === "login"
+                  ? "Don't have an account?"
+                  : "Already have an account?"}
 
-              <button
-                type="button"
-                disabled={loading}
-                onClick={() => {
-                  setAuthMode(
-                    authMode === "login" ? "register" : "login"
-                  );
-                  setAuthMessage("");
-                  setMessageType("error");
-                }}
-              >
-                {authMode === "login" ? "Create one" : "Log in"}
-              </button>
-            </p>
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={() => {
+                    setAuthMode(
+                      authMode === "login" ? "register" : "login"
+                    );
+                    setAuthMessage("");
+                    setMessageType("error");
+                  }}
+                >
+                  {authMode === "login" ? "Create one" : "Log in"}
+                </button>
+              </p>
+            )}
           </div>
         </div>
       )}
