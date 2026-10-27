@@ -1,6 +1,5 @@
-
 import { useEffect, useState } from "react";
-import './App.css';
+import "./App.css";
 
 const API_URL = "https://expense-tracker-system-qju2.onrender.com/api/auth";
 const TRANSACTION_API_URL =
@@ -8,11 +7,14 @@ const TRANSACTION_API_URL =
 
 
 function DashboardView({ user, onLogout }) {
+  const [deleting, setDeleting] = useState(false);
+
   const getToday = () => {
     const today = new Date();
     const year = today.getFullYear();
     const month = String(today.getMonth() + 1).padStart(2, "0");
     const day = String(today.getDate()).padStart(2, "0");
+
     return `${year}-${month}-${day}`;
   };
 
@@ -31,6 +33,7 @@ function DashboardView({ user, onLogout }) {
   const [formType, setFormType] = useState("expense");
   const [refreshKey, setRefreshKey] = useState(0);
   const [form, setForm] = useState({
+    
     amount: "",
     transaction_date: getToday(),
     description: "",
@@ -223,36 +226,43 @@ const handleSaveTransaction = async (event) => {
 };
 
   
+
+
 const handleDeleteTransaction = async (transaction) => {
-  const confirmed = window.confirm(
-    `Delete "${transaction.description || "Untitled transaction"}" (${money(transaction.amount)})?`
-  );
+  if (!transaction || deleting) return;
 
-  if (!confirmed) return;
-
-  setNotice("");
+  setDeleting(true);
   setError("");
+  setNotice("");
 
   try {
     const response = await fetch(
       `${TRANSACTION_API_URL}/${transaction.id}?user_id=${encodeURIComponent(user.id)}`,
-      {
-        method: "DELETE",
-      }
+      { method: "DELETE" }
     );
 
     const data = await response.json();
 
     if (!response.ok) {
-      throw new Error(data.message || "Failed to delete transaction.");
+      throw new Error(
+        data.message || "Failed to delete transaction."
+      );
     }
 
+    setTransactions((previous) =>
+      previous.filter((item) => item.id !== transaction.id)
+    );
+
     setNotice("Transaction deleted successfully!");
+
     setRefreshKey((previous) => previous + 1);
   } catch (err) {
     setError(err.message || "Unable to delete transaction.");
+  } finally {
+    setDeleting(false);
   }
 };
+
 
 
   const firstName = user.full_name?.split(" ")[0] || "User";
@@ -550,44 +560,45 @@ const handleDeleteTransaction = async (transaction) => {
       {money(transaction.amount)}
     </td>
    
-    {/* Actions */}
-    <td>
-      <div className="transaction-row-actions">
-        <button
-          type="button"
-          className="edit-transaction-button"
-          onClick={() => openEditForm(transaction)}
-        >
-          Edit
-        </button>
+    
+                {/* Actions */}
+                <td>
+                  <div className="transaction-row-actions">
+                    <button
+                      type="button"
+                      className="edit-transaction-button"
+                      onClick={() => openEditForm(transaction)}
+                    >
+                      Edit
+                    </button>
 
-        <button
-          type="button"
-          className="delete-transaction-button"
-          onClick={() => handleDeleteTransaction(transaction)}
-        >
-          Delete
-        </button>
+                    
+<button
+  type="button"
+  className="delete-transaction-button"
+  onClick={() => handleDeleteTransaction(transaction)}
+  disabled={deleting}
+>
+  {deleting ? "Deleting…" : "Delete"}
+</button>
+
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
-    </td>
-  </tr>
-))}
+    )}
+  </section>
 
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-
-        <p className="dashboard-footer-note">
-          ExpenseTrack · Your personal finance overview
-        </p>
-      </main>
-    </div>
-  );
+  <p className="dashboard-footer-note">
+    ExpenseTrack · Your personal finance overview
+  </p>
+</main>
+</div>
+);
 }
-
-
 
 function App() {
   const [currentUser, setCurrentUser] = useState(() => {
@@ -599,7 +610,6 @@ function App() {
       return null;
     }
   });
-
   const [showAuth, setShowAuth] = useState(false);
   const [authMode, setAuthMode] = useState("login");
   const [authMessage, setAuthMessage] = useState("");
@@ -751,14 +761,14 @@ function App() {
   };
 
   // Show the dashboard after successful login.
-  if (currentUser) {
-    return (
-      <DashboardView
-        user={currentUser}
-        onLogout={handleLogout}
-      />
-    );
-  }
+if (currentUser) {
+  return (
+    <DashboardView
+      user={currentUser}
+      onLogout={handleLogout}
+    />
+  );
+}
 
   // Show the landing page when the user is logged out.
   return (
